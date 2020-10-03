@@ -92,17 +92,21 @@ class Multivocab(Configurable):
     return
   
   #=============================================================
-  def add_files(self, conll_files):
+  def add_files(self, conll_files, return_new_tokens=False):
     """ """
     
     conll_files = list(conll_files)
     token_vocabs = []
+    new_tokens = None
     for vocab in self:
       if hasattr(vocab, 'token_vocab'):
         if vocab.token_vocab not in token_vocabs:
-          vocab.token_vocab.count(conll_files)
+          need_new_tokens = return_new_tokens and new_tokens is None
+          res = vocab.token_vocab.count(conll_files, return_new_tokens=need_new_tokens )
+          if need_new_tokens:
+            new_tokens = res
           token_vocabs.append(vocab.token_vocab)
-    return
+    return new_tokens
   
   #=============================================================
   def prune_vocab(self):
@@ -113,7 +117,10 @@ class Multivocab(Configurable):
     return
   
   #=============================================================
-
+  def index_orig(self):
+    for vocab in self:
+      if hasattr(vocab, 'index_orig'):
+        vocab.index_orig()
 
   def index_tokens(self):
     """ """
@@ -122,6 +129,13 @@ class Multivocab(Configurable):
       if hasattr(vocab, 'index_tokens'):
         vocab.index_tokens()
     return
+
+  def index_new_tokens(self, new_tokens):
+    for vocab in self:
+      if hasattr(vocab, 'index_new_tokens'):
+        vocab.index_new_tokens(new_tokens)
+      elif hasattr(vocab, 'index_tokens'):
+        vocab.index_tokens()
   
   #=============================================================
   def set_feed_dict(self, data, feed_dict):

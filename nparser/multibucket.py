@@ -104,10 +104,32 @@ class Multibucket(Configurable):
     if isinstance(self.indices, np.ndarray):
       raise TypeError("The buckets have already been closed, you can't add to them")
     
-    idx = self._len2idx.get(len(idxs), len(self)-1)
-    bkt_idx = self[idx].add(idxs, tokens=tokens)
-    self.indices.append( (idx, bkt_idx) )
+    bkt_idx = self._len2idx.get(len(idxs), len(self)-1)
+    idx = self[bkt_idx].add(idxs, tokens=tokens)
+    self.indices.append( (bkt_idx, idx) )
     return len(self.indices) - 1
+
+  def extend_closed(self, idxs_batch):
+    if not isinstance(self.indices, np.ndarray):
+      raise TypeError("The buckets have not yet been closed, you can't extend_closed them")
+    extensions = [[] for _ in self]
+    own_new_indices = []
+    for idxs in idxs_batch:
+      bkt_idx = self._len2idx.get(len(idxs), len(self)-1)
+      extensions[bkt_idx].append(idxs)
+      own_new_indices.append((bkt_idx, len(self[bkt_idx].indices)))
+    old_indices_len = len(self.indices)
+    new_indices_len = old_indices_len + len(own_new_indices)
+    self.indices.resize(new_indices_len)
+    self.indices[old_indices_len:] = own_new_indices
+    for idx, all_idxs in enumerate(extensions):
+      bkt_indices_shape = self[idx].indices.shape
+      all_idxs_len = len(all_idxs)
+      new_len = bkt_indices_shape[0] + all_idxs_len
+      self[idx].indices.resize((new_len, *bkt_indices_shape[1:]), refcheck=False)
+      for offset, idxs in zip(range(all_idxs_len, new_len), all_idxs):
+        self[idx].indices[offset,0:len(idxs)] = idxs
+    return range(old_indices_len, new_indices_len)
   
   #=============================================================
   def close(self):

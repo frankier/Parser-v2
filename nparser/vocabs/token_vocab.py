@@ -41,6 +41,7 @@ class TokenVocab(BaseVocab):
   def __init__(self, *args, **kwargs):
     """ """
     
+    self._orig_counts = None
     recount = kwargs.pop('recount', False)
     initialize_zero = kwargs.pop('initialize_zero', True)
     super(TokenVocab, self).__init__(*args, **kwargs)
@@ -76,10 +77,13 @@ class TokenVocab(BaseVocab):
 
   
   #=============================================================
-  def count(self, conll_files=None):
+  def count(self, conll_files=None, return_new_tokens=False):
     """ """
     if conll_files is None:
       conll_files = self.train_files
+
+    if return_new_tokens:
+      new_tokens = set()
     
     for conll_file in conll_files:
       if isinstance(conll_file,str):
@@ -96,6 +100,8 @@ class TokenVocab(BaseVocab):
             token = line[self.conll_idx]
             if not self.cased:
               token = token.lower()
+            if return_new_tokens and self.counts[token] == 0:
+              new_tokens.add(token)
             self.counts[token] += 1
         except:
           raise ValueError('File %s is misformatted at line %d' % (conll_file, line_num+1))
@@ -105,7 +111,8 @@ class TokenVocab(BaseVocab):
       else:
         f.seek(0)
 
-    return
+    if return_new_tokens:
+      return new_tokens
   
 
   #=============================================================
@@ -120,17 +127,19 @@ class TokenVocab(BaseVocab):
 
   def load(self):
     """ """
-    
-    with codecs.open(self.filename, encoding='utf-8') as f:
-      for line_num, line in enumerate(f):
-        try:
-          line = line.strip()
-          if line:
-            line = line.split('\t')
-            token, count = line
-            self.counts[token] = int(count)
-        except:
-          raise ValueError('File %s is misformatted at line %d' % (train_file, line_num+1))
+    if self._orig_counts is None:
+      self._orig_counts = Counter()
+      with codecs.open(self.filename, encoding='utf-8') as f:
+        for line_num, line in enumerate(f):
+          try:
+            line = line.strip()
+            if line:
+              line = line.split('\t')
+              token, count = line
+              self._orig_counts[token] = int(count)
+          except:
+            raise ValueError('File %s is misformatted at line %d' % (train_file, line_num+1))
+    self._counts = self._orig_counts.copy()
     return
   
   #=============================================================

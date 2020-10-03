@@ -84,16 +84,22 @@ class Network(Configurable):
     return
   
   #=============================================================
-  def add_file_vocabs(self, conll_files):
+  def add_file_vocabs(self, conll_files, do_update=False):
     """ """
     
     # TODO don't depend on hasattr
-    for vocab in self.vocabs:
+    all_new_tokens = {}
+    for idx, vocab in enumerate(self.vocabs):
       if hasattr(vocab, 'add_files'):
-        vocab.add_files(conll_files)
-    for vocab in self.vocabs:
+        new_tokens = vocab.add_files(conll_files, return_new_tokens=do_update)
+        if do_update:
+          all_new_tokens[idx] = new_tokens
+    for idx, vocab in enumerate(self.vocabs):
       if hasattr(vocab, 'index_tokens'):
-        vocab.index_tokens()
+        if do_update and hasattr(vocab, 'index_new_tokens') and idx in all_new_tokens:
+          vocab.index_new_tokens(all_new_tokens[idx])
+        else:
+          vocab.index_tokens()
     return
 
   def prune_vocabs(self):
@@ -420,7 +426,7 @@ class Network(Configurable):
         while True:
 
           self.prune_vocabs()
-          self.add_file_vocabs([self.current_input]) # add new vocubulary items from the current data
+          self.add_file_vocabs([self.current_input], do_update=True) # add new vocubulary items from the current data
           parseset.reinit(self.vocabs, self.current_input) # this creates new buckets for current data
 
 

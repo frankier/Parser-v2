@@ -18,7 +18,6 @@
 
 
 
-
 import sys
 import os
 import codecs
@@ -41,6 +40,10 @@ class SubtokenVocab(TokenVocab):
   def __init__(self, token_vocab, *args, **kwargs):
     """ """
     
+    self._orig_counts = None
+    self._orig_token_counts = None
+    self._orig_tok2idx = None
+    self._orig_idx2tok = None
     recount = kwargs.pop('recount', False)
     initialize_zero = kwargs.pop('initialize_zero', False)
     super(TokenVocab, self).__init__(*args, **kwargs)
@@ -76,6 +79,7 @@ class SubtokenVocab(TokenVocab):
       with tf.variable_scope(self.name.title()):
         self._embeddings = tf.Variable(self._embeddings_array, name='Embeddings', dtype=tf.float32, trainable=True)
     self._multibucket.reset_placeholders()
+    self.index_orig()
     return
 
   #=============================================================
@@ -102,19 +106,23 @@ class SubtokenVocab(TokenVocab):
 
   def load(self):
     """ """
-    
-    train_file = os.path.join(self.save_dir, self.name+'.txt')
-    with codecs.open(train_file, encoding='utf-8') as f:
-      for line_num, line in enumerate(f):
-        try:
-          line = line.rstrip()
-          if line:
-            line = line.split('\t')
-            token, count, token_count = line
-            self.counts[token] = int(count)
-            self.token_counts[token] = int(token_count)
-        except:
-          raise ValueError('File %s is misformatted at line %d' % (train_file, line_num+1))
+    if self._orig_counts is None:
+      self._orig_counts = Counter()
+      self._orig_token_counts = Counter()
+      train_file = os.path.join(self.save_dir, self.name+'.txt')
+      with codecs.open(train_file, encoding='utf-8') as f:
+        for line_num, line in enumerate(f):
+          try:
+            line = line.rstrip()
+            if line:
+              line = line.split('\t')
+              token, count, token_count = line
+              self._orig_counts[token] = int(count)
+              self._orig_token_counts[token] = int(token_count)
+          except:
+            raise ValueError('File %s is misformatted at line %d' % (train_file, line_num+1))
+    self._counts = self._orig_counts.copy()
+    self._token_counts = self._orig_token_counts.copy()
     return
   
   #=============================================================
@@ -130,7 +138,7 @@ class SubtokenVocab(TokenVocab):
   def subtoken_indices(self, token):
     """ """
     
-    return self[list(token)]
+    return [self[c] for c in token]
   
   #=============================================================
   def index_tokens(self):
@@ -149,6 +157,21 @@ class SubtokenVocab(TokenVocab):
     self._idx2tok = {idx: tok for tok, idx in self.tok2idx.items()}
     self._idx2tok[0] = self[self.PAD]
     return
+
+  def index_orig(self):
+    self.index_tokens()
+    self._orig_tok2idx = self._tok2idx
+    self._orig_idx2tok = self._idx2tok
+
+  def index_new_tokens(self, new_tokens):
+    assert (
+      self._orig_tok2idx is not None and
+      self._orig_idx2tok is not None
+    )
+    idxs_batch = [self.subtoken_indices(token) for token in new_tokens]
+    for new_idx, new_token in zip(self.multibucket.extend_closed(idxs_batch), new_tokens):
+      self._tok2idx[new_token] = new_idx
+      self._idx2tok[new_idx] = new_token
   
   #=============================================================
   def set_feed_dict(self, data, feed_dict):
